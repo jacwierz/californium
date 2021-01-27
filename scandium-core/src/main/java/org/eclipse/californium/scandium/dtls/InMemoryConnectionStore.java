@@ -211,7 +211,7 @@ public final class InMemoryConnectionStore implements ResumptionSupportingConnec
 
 	@Override
 	public synchronized void markAllAsResumptionRequired() {
-		for (Iterator<Connection> iterator = connections.values(); iterator.hasNext(); ) {
+		for (Iterator<Connection> iterator = connections.valuesIterator(); iterator.hasNext(); ) {
 			Connection c = iterator.next();
 			if (c != null){
 				c.setResumptionRequired(true);

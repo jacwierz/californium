@@ -415,7 +415,7 @@ public class SslContextUtil {
 		}
 		KeyManager[] keyManager = createKeyManager(alias, privateKey, chain);
 		TrustManager[] trustManager = createTrustManager(alias, trusts);
-		SSLContext sslContext = SSLContext.getInstance("TLS");
+		SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
 		sslContext.init(keyManager, trustManager, null);
 		return sslContext;
 	}
