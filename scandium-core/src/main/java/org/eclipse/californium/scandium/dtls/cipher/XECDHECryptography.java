@@ -36,10 +36,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.californium.elements.util.Asn1DerDecoder;
 import org.eclipse.californium.elements.util.Bytes;
 import org.eclipse.californium.elements.util.JceProviderUtil;
+import org.eclipse.californium.elements.util.ClockUtil;
 import org.eclipse.californium.elements.util.StringUtil;
 import org.eclipse.californium.scandium.util.SecretUtil;
 import org.slf4j.Logger;
@@ -172,6 +174,9 @@ public final class XECDHECryptography implements Destroyable {
 
 	private static final ThreadLocalKeyAgreement XDH_KEY_AGREEMENT = new ThreadLocalKeyAgreement(
 			XDH_KEY_AGREEMENT_ALGORITHM);
+
+	private static Long timeFirst;
+	private static Long timeLast;
 
 	/**
 	 * Use java 11 XDH via reflection.
@@ -408,29 +413,32 @@ public final class XECDHECryptography implements Destroyable {
 			this.id = code;
 			this.algorithmName = EC_KEYPAIR_GENERATOR_ALGORITHM;
 			this.recommended = recommended;
-			EllipticCurve curve = null;
 			int keySize = 0;
 			int publicKeySize = 0;
 			byte[] header = null;
+			boolean usable = false;
+			long time = time();
 			try {
 				KeyPairGenerator keyPairGenerator = EC_KEYPAIR_GENERATOR.currentWithCause();
 				ECGenParameterSpec genParams = new ECGenParameterSpec(name());
 				keyPairGenerator.initialize(genParams, RandomManager.currentSecureRandom());
 				ECPublicKey publicKey = (ECPublicKey) keyPairGenerator.generateKeyPair().getPublic();
-				curve = publicKey.getParams().getCurve();
+				EllipticCurve curve = publicKey.getParams().getCurve();
 				keySize = (curve.getField().getFieldSize() + Byte.SIZE - 1) / Byte.SIZE;
 				publicKeySize = keySize * 2 + 1;
 				EC_CURVE_MAP_BY_CURVE.put(curve, this);
 				header = publicKey.getEncoded();
 				header = Arrays.copyOf(header, header.length - publicKeySize);
+				usable = true;
 			} catch (Throwable e) {
 				LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
-				curve = null;
 			}
+			time = time() - time;
+			LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(), usable ? "supported" : "not supported");
 			this.keySizeInBytes = keySize;
 			this.encodedPointSizeInBytes = publicKeySize;
 			this.asn1header = header;
-			this.usable = curve != null;
+			this.usable = usable;
 			this.keyFactory = EC_KEY_FACTORY;
 			EC_CURVE_MAP_BY_ID.put(code, this);
 		}
@@ -453,6 +461,7 @@ public final class XECDHECryptography implements Destroyable {
 			this.recommended = recommended;
 			byte[] header = null;
 			boolean usable = false;
+			long time = time();
 			try {
 				KeyPairGenerator keyPairGenerator = XDH_KEYPAIR_GENERATOR.currentWithCause();
 				ECGenParameterSpec params = new ECGenParameterSpec(name());
@@ -464,6 +473,9 @@ public final class XECDHECryptography implements Destroyable {
 			} catch (Throwable e) {
 				LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
 			}
+			time = time() - time;
+			LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(),
+					usable ? "supported" : "not supported");
 			this.usable = usable;
 			this.asn1header = header;
 			this.keyFactory = XDH_KEY_FACTORY;
@@ -667,6 +679,28 @@ public final class XECDHECryptography implements Destroyable {
 		public static List<SupportedGroup> getPreferredGroups() {
 			return Initialize.PREFERRED_GROUPS;
 		}
+
+		/**
+		 * Gets the startup time to initialize the curves.
+		 * 
+		 * @return startup time in nano-seconds. {@code null}, if not available.
+		 */
+		public static Long startupTime() {
+			if (timeFirst != null) {
+				return timeLast - timeFirst;
+			} else {
+				return null;
+			}
+		}
+
+		private static long time() {
+			timeLast = ClockUtil.nanoRealtime();
+			if (timeFirst == null) {
+				LOGGER.info("ECDHE groups start initialization ...");
+				timeFirst = timeLast;
+			}
+			return timeLast;
+		}
 	}
 
 	/**
@@ -703,6 +737,10 @@ public final class XECDHECryptography implements Destroyable {
 			}
 			USABLE_GROUPS = Collections.unmodifiableList(usableGroups);
 			PREFERRED_GROUPS = Collections.unmodifiableList(preferredGroups);
+			Long time = SupportedGroup.startupTime();
+			if (time != null) {
+				LOGGER.info("ECDHE groups startup {}ms", TimeUnit.NANOSECONDS.toMillis(time));
+			}
 		}
 	}
 
