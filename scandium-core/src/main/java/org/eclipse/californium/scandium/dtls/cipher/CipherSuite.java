@@ -140,6 +140,7 @@ public enum CipherSuite {
 	private final PRFAlgorithm pseudoRandomFunction;
 	private final int maxCipherTextExpansion;
 	private final boolean recommendedCipherSuite;
+	private final boolean supported;
 
 	// Constructor ////////////////////////////////////////////////////
 
@@ -155,6 +156,9 @@ public enum CipherSuite {
 		this.macAlgorithm = macAlgorithm;
 		this.recommendedCipherSuite = recommendedCipherSuite;
 		this.pseudoRandomFunction = prf;
+		this.supported = !CryptographyInitializeConfiguration.isInhibited(name())
+				&& pseudoRandomFunction.getMacAlgorithm().isSupported() && macAlgorithm.isSupported()
+				&& cipher.isSupported();
 		switch(this.cipher.getType()) {
 		case BLOCK:
 			maxCipherTextExpansion =
@@ -280,8 +284,7 @@ public enum CipherSuite {
 	 * @return {@code true} if cipher suite is supported
 	 */
 	public boolean isSupported() {
-		return pseudoRandomFunction.getMacAlgorithm().isSupported() && macAlgorithm.isSupported()
-				&& cipher.isSupported();
+		return supported;
 	}
 
 	/**
@@ -819,6 +822,10 @@ public enum CipherSuite {
 				this.supported = true;
 				this.mac = null;
 				this.md = null;
+			} else if (CryptographyInitializeConfiguration.isInhibited(name())) {
+				this.supported = false;
+				this.mac = null;
+				this.md = null;
 			} else {
 				this.mac = new ThreadLocalMac(name);
 				this.md = new ThreadLocalMessageDigest(mdName);
@@ -977,16 +984,21 @@ public enum CipherSuite {
 			this.fixedIvLength = fixedIvLength;
 			this.recordIvLength = recordIvLength;
 			this.macLength = macLength;
-			boolean supported = true;
-			if (type == CipherType.AEAD || type == CipherType.BLOCK) {
-				supported = AeadBlockCipher.isSupported(transformation, keyLength);
-			}
-			if (AeadBlockCipher.AES_CCM.equals(transformation)) {
+			if (CryptographyInitializeConfiguration.isInhibited(transformation)) {
 				this.cipher = null;
-				this.supported = supported;
+				this.supported = false;
 			} else {
-				this.cipher = supported ? new ThreadLocalCipher(transformation) : null;
-				this.supported = this.cipher == null ? false : this.cipher.isSupported();
+				boolean supported = true;
+				if (type == CipherType.AEAD || type == CipherType.BLOCK) {
+					supported = AeadBlockCipher.isSupported(transformation, keyLength);
+				}
+				if (AeadBlockCipher.AES_CCM.equals(transformation)) {
+					this.cipher = null;
+					this.supported = supported;
+				} else {
+					this.cipher = supported ? new ThreadLocalCipher(transformation) : null;
+					this.supported = this.cipher == null ? false : this.cipher.isSupported();
+				}
 			}
 		}
 

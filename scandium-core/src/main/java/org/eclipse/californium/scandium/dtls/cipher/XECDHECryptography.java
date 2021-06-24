@@ -417,24 +417,26 @@ public final class XECDHECryptography implements Destroyable {
 			int publicKeySize = 0;
 			byte[] header = null;
 			boolean usable = false;
-			long time = time();
-			try {
-				KeyPairGenerator keyPairGenerator = EC_KEYPAIR_GENERATOR.currentWithCause();
-				ECGenParameterSpec genParams = new ECGenParameterSpec(name());
-				keyPairGenerator.initialize(genParams, RandomManager.currentSecureRandom());
-				ECPublicKey publicKey = (ECPublicKey) keyPairGenerator.generateKeyPair().getPublic();
-				EllipticCurve curve = publicKey.getParams().getCurve();
-				keySize = (curve.getField().getFieldSize() + Byte.SIZE - 1) / Byte.SIZE;
-				publicKeySize = keySize * 2 + 1;
-				EC_CURVE_MAP_BY_CURVE.put(curve, this);
-				header = publicKey.getEncoded();
-				header = Arrays.copyOf(header, header.length - publicKeySize);
-				usable = true;
-			} catch (Throwable e) {
-				LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
+			if (!CryptographyInitializeConfiguration.isInhibited(name())) {
+				long time = time();
+				try {
+					KeyPairGenerator keyPairGenerator = EC_KEYPAIR_GENERATOR.currentWithCause();
+					ECGenParameterSpec genParams = new ECGenParameterSpec(name());
+					keyPairGenerator.initialize(genParams, RandomManager.currentSecureRandom());
+					ECPublicKey publicKey = (ECPublicKey) keyPairGenerator.generateKeyPair().getPublic();
+					EllipticCurve curve = publicKey.getParams().getCurve();
+					keySize = (curve.getField().getFieldSize() + Byte.SIZE - 1) / Byte.SIZE;
+					publicKeySize = keySize * 2 + 1;
+					EC_CURVE_MAP_BY_CURVE.put(curve, this);
+					header = publicKey.getEncoded();
+					header = Arrays.copyOf(header, header.length - publicKeySize);
+					usable = true;
+				} catch (Throwable e) {
+					LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
+				}
+				time = time() - time;
+				LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(), usable ? "supported" : "not supported");
 			}
-			time = time() - time;
-			LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(), usable ? "supported" : "not supported");
 			this.keySizeInBytes = keySize;
 			this.encodedPointSizeInBytes = publicKeySize;
 			this.asn1header = header;
@@ -461,21 +463,23 @@ public final class XECDHECryptography implements Destroyable {
 			this.recommended = recommended;
 			byte[] header = null;
 			boolean usable = false;
-			long time = time();
-			try {
-				KeyPairGenerator keyPairGenerator = XDH_KEYPAIR_GENERATOR.currentWithCause();
-				ECGenParameterSpec params = new ECGenParameterSpec(name());
-				keyPairGenerator.initialize(params, RandomManager.currentSecureRandom());
-				PublicKey publicKey = keyPairGenerator.generateKeyPair().getPublic();
-				header = publicKey.getEncoded();
-				header = Arrays.copyOf(header, header.length - keySizeInBytes);
-				usable = true;
-			} catch (Throwable e) {
-				LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
+			if (!CryptographyInitializeConfiguration.isInhibited(name())) {
+				long time = time();
+				try {
+					KeyPairGenerator keyPairGenerator = XDH_KEYPAIR_GENERATOR.currentWithCause();
+					ECGenParameterSpec params = new ECGenParameterSpec(name());
+					keyPairGenerator.initialize(params, RandomManager.currentSecureRandom());
+					PublicKey publicKey = keyPairGenerator.generateKeyPair().getPublic();
+					header = publicKey.getEncoded();
+					header = Arrays.copyOf(header, header.length - keySizeInBytes);
+					usable = true;
+				} catch (Throwable e) {
+					LOGGER.trace("Group [{}] is not supported by JCE! {}", name(), e.getMessage());
+				}
+				time = time() - time;
+				LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(),
+						usable ? "supported" : "not supported");
 			}
-			time = time() - time;
-			LOGGER.info("Curve {}ms: {} {}", TimeUnit.NANOSECONDS.toMillis(time), name(),
-					usable ? "supported" : "not supported");
 			this.usable = usable;
 			this.asn1header = header;
 			this.keyFactory = XDH_KEY_FACTORY;
