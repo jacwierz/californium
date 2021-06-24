@@ -2,6 +2,10 @@
 
 # Californium should not need any R8 rules for it to work properly.
 
+-keep class org.bouncycastle.**
+-keep interface org.bouncycastle.**
+-keep enum org.bouncycastle.**
+
 
 # The rules below are only added here for testing the sample app, you do not need to add them in your project.
 # Keep line numbers for debugging

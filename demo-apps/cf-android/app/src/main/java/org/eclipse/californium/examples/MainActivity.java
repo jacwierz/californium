@@ -39,7 +39,10 @@ import org.eclipse.californium.scandium.DTLSConnector;
 import org.eclipse.californium.scandium.config.DtlsConfig;
 import org.eclipse.californium.scandium.config.DtlsConfig.DtlsRole;
 import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
+import org.eclipse.californium.scandium.dtls.cipher.CryptographyInitializeConfiguration;
+import org.eclipse.californium.scandium.dtls.cipher.XECDHECryptography;
 
+import java.security.Security;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -163,15 +166,67 @@ public class MainActivity extends Activity {
      * and dtls connector.
      */
     private void initCoapEndpoint() {
+        if (false) {
+            CryptographyInitializeConfiguration.inhibit("sect163k1");
+            CryptographyInitializeConfiguration.inhibit("sect163r1");
+            CryptographyInitializeConfiguration.inhibit("sect163r2");
+            CryptographyInitializeConfiguration.inhibit("sect193r1");
+            CryptographyInitializeConfiguration.inhibit("sect193r2");
+            CryptographyInitializeConfiguration.inhibit("sect233k1");
+            CryptographyInitializeConfiguration.inhibit("sect233r1");
+            CryptographyInitializeConfiguration.inhibit("sect239k1");
+            CryptographyInitializeConfiguration.inhibit("sect283k1");
+            CryptographyInitializeConfiguration.inhibit("sect283r1");
+            CryptographyInitializeConfiguration.inhibit("sect409k1");
+            CryptographyInitializeConfiguration.inhibit("sect409r1");
+            CryptographyInitializeConfiguration.inhibit("sect571k1");
+            CryptographyInitializeConfiguration.inhibit("sect571r1");
+            CryptographyInitializeConfiguration.inhibit("secp160k1");
+            CryptographyInitializeConfiguration.inhibit("secp160r1");
+            CryptographyInitializeConfiguration.inhibit("secp160r2");
+            CryptographyInitializeConfiguration.inhibit("secp192k1");
+            CryptographyInitializeConfiguration.inhibit("secp192r1");
+            CryptographyInitializeConfiguration.inhibit("secp224k1");
+            CryptographyInitializeConfiguration.inhibit("secp224r1");
+            CryptographyInitializeConfiguration.inhibit("ffdhe2048");
+            CryptographyInitializeConfiguration.inhibit("ffdhe3072");
+            CryptographyInitializeConfiguration.inhibit("ffdhe4096");
+            CryptographyInitializeConfiguration.inhibit("ffdhe6144");
+            CryptographyInitializeConfiguration.inhibit("ffdhe8192");
+        }
+        Security.removeProvider("BC");
+        Security.insertProviderAt(new org.bouncycastle.jce.provider.BouncyCastleProvider(), 1);
+        StringBuilder usableEcc = new StringBuilder();
+        long time = System.nanoTime();
+        for (XECDHECryptography.SupportedGroup group :  XECDHECryptography.SupportedGroup.values()) {
+            if (group.isUsable()) {
+                usableEcc.append(group.name()).append(", ");
+                Log.i("coap", group.name() + " is supported!");
+            } else {
+                Log.i("coap", group.name() + " is not supported!");
+            }
+        }
+        if (usableEcc.length() > 2) {
+            usableEcc.setLength(usableEcc.length());
+        }
+        // setup coap EndpointManager to dtls connector
         CoapConfig.register();
         DtlsConfig.register();
         Configuration config = Configuration.createStandardWithoutFile();
-        // setup coap EndpointManager to dtls connector
         DtlsConnectorConfig.Builder dtlsConfig = DtlsConnectorConfig.builder(config);
         dtlsConfig.set(DtlsConfig.DTLS_ROLE, DtlsRole.CLIENT_ONLY);
         dtlsConfig.set(DtlsConfig.DTLS_AUTO_HANDSHAKE_TIMEOUT, 30, TimeUnit.SECONDS);
         ConfigureDtls.loadCredentials(dtlsConfig, CLIENT_NAME);
         DTLSConnector dtlsConnector = new DTLSConnector(dtlsConfig.build());
+        time = System.nanoTime() - time;
+        String message = "DTLS init " + TimeUnit.NANOSECONDS.toMillis(time) + "ms.";
+        Long eccTime = XECDHECryptography.SupportedGroup.startupTime();
+        if (eccTime != null) {
+            message += " ECC init " + TimeUnit.NANOSECONDS.toMillis(eccTime) + "ms.";
+        }
+        Log.i("coap", message);
+        ((TextView) findViewById(R.id.textRtt)).setText(message);
+        ((TextView) findViewById(R.id.textContent)).setText(usableEcc);
 
         CoapEndpoint.Builder dtlsEndpointBuilder = new CoapEndpoint.Builder();
         dtlsEndpointBuilder.setConfiguration(config);
