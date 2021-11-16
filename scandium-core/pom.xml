@@ -52,6 +52,12 @@
 			<artifactId>demo-certs</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>redis.clients</groupId>
+			<artifactId>jedis</artifactId>
+			<!-- stuck to 3.5.x for java7 compliance -->
+			<version>3.5.2</version>
+		</dependency>
 	</dependencies>
 
 	<profiles>

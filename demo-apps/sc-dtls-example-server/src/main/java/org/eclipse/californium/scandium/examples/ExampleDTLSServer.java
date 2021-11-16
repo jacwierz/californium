@@ -32,6 +32,8 @@ import org.eclipse.californium.scandium.DTLSConnector;
 import org.eclipse.californium.scandium.config.DtlsConfig;
 import org.eclipse.californium.scandium.config.DtlsConnectorConfig;
 import org.eclipse.californium.scandium.dtls.CertificateType;
+import org.eclipse.californium.scandium.dtls.InMemorySessionStore;
+import org.eclipse.californium.scandium.dtls.RedisSessionStore;
 import org.eclipse.californium.scandium.dtls.pskstore.AdvancedMultiPskStore;
 import org.eclipse.californium.scandium.dtls.x509.SingleCertificateProvider;
 import org.eclipse.californium.scandium.dtls.x509.StaticNewAdvancedCertificateVerifier;
@@ -47,6 +49,7 @@ public class ExampleDTLSServer {
 	private static final String KEY_STORE_LOCATION = "certs/keyStore.jks";
 	private static final char[] TRUST_STORE_PASSWORD = "rootPass".toCharArray();
 	private static final String TRUST_STORE_LOCATION = "certs/trustStore.jks";
+	private static String redis_url = null;
 
 	static {
 		DtlsConfig.register();
@@ -69,6 +72,7 @@ public class ExampleDTLSServer {
 
 	public ExampleDTLSServer() {
 		AdvancedMultiPskStore pskStore = new AdvancedMultiPskStore();
+		InMemorySessionStore inmemorySessionStore = new InMemorySessionStore(150000, 1800);
 		// put in the PSK store the default identity/psk for tinydtls tests
 		pskStore.setKey("Client_identity", "secretPSK".getBytes());
 		try {
@@ -80,13 +84,21 @@ public class ExampleDTLSServer {
 					SslContextUtil.CLASSPATH_SCHEME + TRUST_STORE_LOCATION, "root", TRUST_STORE_PASSWORD);
 
 			Configuration configuration = Configuration.createWithFile(Configuration.DEFAULT_FILE, "DTLS example server", DEFAULTS);
-			DtlsConnectorConfig.Builder builder = DtlsConnectorConfig.builder(configuration)
-					.setAddress(new InetSocketAddress(DEFAULT_PORT))
-					.setAdvancedPskStore(pskStore)
-					.setCertificateIdentityProvider(
-							new SingleCertificateProvider(serverCredentials.getPrivateKey(), serverCredentials.getCertificateChain(), CertificateType.RAW_PUBLIC_KEY, CertificateType.X_509))
-					.setAdvancedCertificateVerifier(StaticNewAdvancedCertificateVerifier.builder()
-							.setTrustedCertificates(trustedCertificates).setTrustAllRPKs().build());
+			DtlsConnectorConfig.Builder builder = new DtlsConnectorConfig.Builder(configuration);
+			builder.setAddress(new InetSocketAddress(DEFAULT_PORT));
+			builder.setAdvancedPskStore(pskStore);
+			if (redis_url!=null)
+			{
+
+				RedisSessionStore redisSessionStore = new RedisSessionStore( redis_url, 60*60*24);
+				builder.setSessionStore(redisSessionStore);}
+			else {
+				builder.setSessionStore(inmemorySessionStore);
+			}
+			builder.setCertificateIdentityProvider(new SingleCertificateProvider(serverCredentials.getPrivateKey(), serverCredentials.getCertificateChain(),
+					CertificateType.RAW_PUBLIC_KEY, CertificateType.X_509));
+			builder.setAdvancedCertificateVerifier(StaticNewAdvancedCertificateVerifier.builder()
+					.setTrustedCertificates(trustedCertificates).setTrustAllRPKs().build());
 
 			dtlsConnector = new DTLSConnector(builder.build());
 			dtlsConnector
@@ -127,7 +139,10 @@ public class ExampleDTLSServer {
 	}
 
 	public static void main(String[] args) {
-
+		if (args.length != 0)
+		{
+			redis_url =args[0];
+		}
 		ExampleDTLSServer server = new ExampleDTLSServer();
 		server.start();
 		try {
